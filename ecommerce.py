@@ -10,14 +10,12 @@ Advanced features demonstrated
   * LEGB      -> make_money_formatter() and make_status_tracker() (closures)
 """
 
-# ------------------------------------------------------------------ constants
-# Global scope (the "G" in LEGB): read-only configuration. Functions only READ
-# these values; no function ever changes a global variable.
+#  constants
 DEFAULT_CURRENCY = "$"
-DISCOUNT_TIERS = ((1000, 0.15), (500, 0.10), (200, 0.05))   # (minimum, rate)
+DISCOUNT_TIERS = ((1000, 0.15), (500, 0.10), (200, 0.05))   
 FREE_SHIPPING_THRESHOLD = 500
 SHIPPING_FEE = 20
-MAX_AMOUNT = 10 ** 9            # upper sanity limit for prices, stock, options
+MAX_AMOUNT = 10 ** 9            
 DEFAULT_OPTIONS = {
     "include_shipping": True,
     "apply_discount": True,
@@ -28,11 +26,11 @@ BOOLEAN_OPTIONS = ("include_shipping", "apply_discount")
 NUMERIC_OPTIONS = ("free_shipping_threshold", "shipping_fee")
 STATUSES = ("paid", "pending", "rejected")
 DEFAULT_LOW_STOCK_LIMIT = 10
-NUMBER_LIMIT = 10 ** 19         # larger numbers are ignored by the money helpers
-TEXT_LIMIT = 30                 # longest piece of user text shown in an error message
+NUMBER_LIMIT = 10 ** 19        
+TEXT_LIMIT = 30                
 
 
-# ------------------------------------------------------------------ starter data
+#  starter data
 def get_starter_products():
     """Return a fresh product catalogue (no shared global data)."""
     return {
@@ -60,7 +58,7 @@ def get_starter_orders():
     ]
 
 
-# ------------------------------------------------------------------ safe helpers
+# safe helpers
 def describe(value):
     """Short, safe text for error messages. Never calls repr() on unknown objects,
     so deeply nested or huge values cannot crash the message itself."""
@@ -90,14 +88,14 @@ def calculate_total(subtotal, *adjustments):
     return sum_amounts(subtotal, *adjustments)
 
 
-# ------------------------------------------------------------------ validation
+# validation
 def is_valid_amount(value):
     """True for a finite, non-negative number up to MAX_AMOUNT (not bool/NaN/inf)."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
-    if value != value:                    # NaN is the only value not equal to itself
+    if value != value:                    
         return False
-    return 0 <= value <= MAX_AMOUNT       # also rules out infinity
+    return 0 <= value <= MAX_AMOUNT      
 
 
 def is_valid_whole_number(value, minimum=0):
@@ -139,7 +137,7 @@ def validate_order(order, products):
         errors.append("Order has no items")
         return errors
 
-    requested = {}                        # combined quantity per product
+    requested = {}                        
     for item in items:
         if not isinstance(item, dict):
             errors.append("Invalid item entry")
@@ -153,7 +151,7 @@ def validate_order(order, products):
         else:
             requested[pid] = requested.get(pid, 0) + qty
 
-    for pid, qty in requested.items():    # each product checked once
+    for pid, qty in requested.items():    
         problem = check_product(products[pid])
         if problem:
             errors.append(f"{problem} for {pid}")
@@ -163,7 +161,7 @@ def validate_order(order, products):
     return errors
 
 
-# ------------------------------------------------------------------ calculations
+# calculations
 def valid_lines(order, products):
     """(product_id, quantity) for every well-formed item; anything else is skipped."""
     items = order.get("items") if isinstance(order, dict) else None
@@ -205,7 +203,7 @@ def calculate_shipping(subtotal, free_threshold=FREE_SHIPPING_THRESHOLD,
     return 0 if is_number(subtotal) and subtotal >= threshold else fee
 
 
-# ------------------------------------------------------------------ options (**kwargs)
+# options
 def resolve_options(options):
     """Merge options with defaults. Returns (options, error_message)."""
     unknown = sorted(key for key in options if key not in DEFAULT_OPTIONS)
@@ -219,7 +217,7 @@ def resolve_options(options):
     return merged, None
 
 
-# ------------------------------------------------------------------ processing
+# processing
 def clean_text(value):
     """Trimmed text, or 'UNKNOWN' if the value is not usable text."""
     return value.strip() if isinstance(value, str) and value.strip() else "UNKNOWN"
@@ -281,7 +279,7 @@ def process_order(order, products, /, **options):
 
     return {
         "order_id": clean_text(order["order_id"]),
-        "customer": clean_text(order["customer"]),   # " Ali " and "Ali" are one customer
+        "customer": clean_text(order["customer"]),  
         "status": status, "items": line_items, "subtotal": subtotal,
         "discount": discount, "shipping": shipping, "total": total, "errors": [],
     }
@@ -299,7 +297,7 @@ def process_all_orders(orders, products, /, **options):
     results = []
     for order in orders:
         order_id = clean_text(order.get("order_id") if isinstance(order, dict) else None)
-        if order_id in seen_ids:          # checked BEFORE processing: no stock change
+        if order_id in seen_ids:          
             results.append(build_rejection(order, ["Duplicate order_id"]))
             continue
         result = process_order(order, products, **options)
@@ -309,19 +307,18 @@ def process_all_orders(orders, products, /, **options):
     return results
 
 
-# ------------------------------------------------------------------ LEGB closures
+# LEGB closures
 def make_money_formatter(symbol=None):
     """Closure showing all four LEGB scopes."""
-    if not isinstance(symbol, str):       # L: local variable
-        symbol = DEFAULT_CURRENCY         # G: global (read-only) constant
+    if not isinstance(symbol, str):       
+        symbol = DEFAULT_CURRENCY       
 
     def format_money(amount):
-        # E: 'symbol' comes from the enclosing function
-        # B: format() is a built-in
+        
         try:
             return symbol + format(amount, ".2f")
         except (TypeError, ValueError, OverflowError):
-            return "N/A"                  # not a number: show a placeholder
+            return "N/A"               
 
     return format_money
 
@@ -331,16 +328,16 @@ def make_status_tracker():
     counts = {status: 0 for status in STATUSES}
 
     def record(status):
-        if status in counts:              # unknown statuses are ignored
-            counts[status] += 1           # inner function updates enclosing data
+        if status in counts:              
+            counts[status] += 1          
 
     def summary():
-        return dict(counts)               # a copy, so callers cannot alter it
+        return dict(counts)               
 
     return record, summary
 
 
-# ------------------------------------------------------------------ reports
+#  reports
 def is_valid_result(result):
     """True only for a complete, correctly typed result built by process_order."""
     if not isinstance(result, dict) or result.get("status") not in STATUSES:
@@ -391,7 +388,7 @@ def generate_customer_report(processed_orders):
         "top_customers": top,
         "top_spend": ranking[0][1] if ranking else 0,
         "ranking": ranking,
-        # set: customers with at least one valid (paid or pending) order
+     
         "unique_customers": {o["customer"] for o in results
                              if o["status"] != "rejected"},
     }
@@ -428,7 +425,7 @@ def generate_product_report(processed_orders, products,
         "best_products": best,
         "best_product_units": ranking[0][1] if ranking else 0,
         "units_by_product": dict(ranking),
-        # set: categories that actually sold
+        
         "categories_sold": {catalogue[pid]["category"] for pid in units
                             if check_product(catalogue.get(pid)) == ""},
         "low_stock": low_stock,
@@ -479,7 +476,7 @@ def print_report(report, processed_orders, money=None):
     """Print results and report. Bad or missing data is skipped, never a crash."""
     formatter = money if callable(money) else make_money_formatter()
 
-    def money(amount):                    # a broken formatter shows N/A, not a crash
+    def money(amount):                    
         try:
             return str(formatter(amount))
         except Exception:
@@ -528,7 +525,7 @@ def print_report(report, processed_orders, money=None):
         print(f"Warning: {warning}")
 
 
-# ------------------------------------------------------------------ tests
+# tests
 def make_order(items, status="paid", order_id="T1", customer="Test"):
     return {"order_id": order_id, "customer": customer,
             "items": items, "payment_status": status}
@@ -543,13 +540,13 @@ def mouse(qty):
 
 
 def run_tests():
-    # --- discount / shipping boundaries and *args helpers
+    
     assert [calculate_discount(s) for s in (1000, 999.99, 500, 499.99, 200, 199.99)] \
         == [150.0, round(999.99 * 0.10, 2), 50.0, round(499.99 * 0.05, 2), 10.0, 0]
     assert calculate_shipping(500) == 0 and calculate_shipping(499.99) == 20
     assert sum_amounts() == 0 and calculate_total(100, -10, 20) == 110
 
-    # --- every kind of bad order is rejected, never crashes, never touches stock
+  
     p = get_starter_products()
     bad_orders = [
         make_order([{"product_id": "X", "quantity": 1}]),
@@ -559,49 +556,44 @@ def run_tests():
         make_order([]), make_order("not a list"), make_order(["oops"]),
         make_order(mouse(1), "refunded"), make_order(mouse(1), customer=""),
         make_order(mouse(1), order_id=""), make_order(mouse(1), order_id=None),
-        {"customer": "A", "items": mouse(1), "payment_status": "paid"},   # no order_id
+        {"customer": "A", "items": mouse(1), "payment_status": "paid"},   
         None, {}, [], "text", 42,
     ]
     for bad in bad_orders:
         assert process_order(bad, p)["status"] == "rejected", bad
     assert p == get_starter_products()
 
-    # --- all errors are reported, not just the first
+    
     multi = process_order(make_order([{"product_id": "X", "quantity": -1}], "refunded",
                                      customer=""), p)
     assert len(multi["errors"]) >= 3
 
-    # --- stock: too much, and duplicate lines that together exceed stock
     assert process_order(make_order([{"product_id": "P001", "quantity": 11}]), p)["status"] == "rejected"
     dup = make_order([{"product_id": "P001", "quantity": 6}, {"product_id": "P001", "quantity": 6}])
     assert process_order(dup, p)["status"] == "rejected"
     assert p["P001"]["stock"] == 10
 
-    # --- broken product data: NaN / inf / overflow prices, missing name, bad stock
     for broken in (
         {"name": "M", "category": "A", "price": float("nan"), "stock": 5},
         {"name": "M", "category": "A", "price": float("inf"), "stock": 5},
         {"name": "M", "category": "A", "price": 10 ** 400, "stock": 5},
         {"name": "M", "category": "A", "price": 1e308, "stock": 5},
         {"name": "M", "category": "A", "price": "free", "stock": 5},
-        {"category": "A", "price": 5, "stock": 5},                     # no name
-        {"name": ["x"], "category": "A", "price": 5, "stock": 5},      # list name
+        {"category": "A", "price": 5, "stock": 5},                     
+        {"name": ["x"], "category": "A", "price": 5, "stock": 5},      
         {"name": "M", "category": "A", "price": 5, "stock": True},
     ):
         assert process_order(make_order(mouse(1)), {"P002": broken})["status"] == "rejected", broken
     assert process_order(make_order(mouse(1)), {})["status"] == "rejected"
     assert process_order(make_order(mouse(1)), None)["status"] == "rejected"
 
-    # --- pending keeps its amount due, stock untouched
     r = process_order(make_order(mouse(5), "pending"), p)
     assert r["status"] == "pending" and r["total"] == 145 and p["P002"]["stock"] == 50
 
-    # --- paid: 25*8 = 200 -> $10 discount + $20 shipping = $210, stock reduced
     r = process_order(make_order(mouse(8)), p)
     assert (r["status"], r["subtotal"], r["discount"], r["shipping"], r["total"]) \
         == ("paid", 200, 10, 20, 210) and p["P002"]["stock"] == 42
 
-    # --- **kwargs options (all four) and invalid options
     p = get_starter_products()
     o = make_order(mouse(8))
     assert process_order(o, p, include_shipping=False)["total"] == 190
@@ -614,20 +606,18 @@ def run_tests():
                     {"shipping_fee": True}):
         assert process_order(o, p, **bad_opt)["status"] == "rejected", bad_opt
 
-    # --- sequential stock, duplicate order IDs (stock must not change for a duplicate)
     p = get_starter_products()
     res = process_all_orders([
         make_order([{"product_id": "P001", "quantity": 9}], order_id="A"),
-        make_order([{"product_id": "P001", "quantity": 2}], order_id="B"),   # only 1 left
-        make_order(mouse(1), order_id="A"),                                   # duplicate
+        make_order([{"product_id": "P001", "quantity": 2}], order_id="B"),  
+        make_order(mouse(1), order_id="A"),                                 
         make_order(mouse(1), "pending", order_id="C"),
-        make_order(mouse(1), "pending", order_id="C"),                        # duplicate
+        make_order(mouse(1), "pending", order_id="C"),                       
     ], p)
     assert [x["status"] for x in res] == ["paid", "rejected", "rejected", "pending", "rejected"]
     assert p["P001"]["stock"] == 1 and p["P002"]["stock"] == 50
     assert process_all_orders("nope", p) == []
 
-    # --- whitespace in names, ties
     p = get_starter_products()
     res = process_all_orders([
         make_order(mouse(4), order_id="1", customer=" Ann "),
@@ -635,16 +625,15 @@ def run_tests():
         make_order(mouse(1), "pending", order_id="3", customer="Ann"),
     ], p)
     rep = generate_sales_report(res, p)
-    assert rep["unique_customers"] == {"Ann", "Bob"}       # " Ann " == "Ann"
-    assert rep["top_customers"] == ["Ann", "Bob"]          # tie at $120 each
+    assert rep["unique_customers"] == {"Ann", "Bob"}       
+    assert rep["top_customers"] == ["Ann", "Bob"]          
     assert rep["best_products"] == ["Mouse"] and rep["best_product_units"] == 8
 
-    # --- report never crashes on bad inputs and never changes anything
     for bad_results in (None, "x", 5, [None, 1, {}, {"status": "weird"}]):
         for bad_products in (None, [], "x", {}, {"P002": {"price": 1}}):
             rep = generate_sales_report(bad_results, bad_products)
             assert rep["total_orders"] == 0 and rep["total_revenue"] == 0
-    rep = generate_sales_report(res, {"P002": {"price": 5, "stock": 5}})   # broken catalogue
+    rep = generate_sales_report(res, {"P002": {"price": 5, "stock": 5}})  
     assert rep["best_products"] == ["P002"] and rep["low_stock"] == []
     for bad_limit in ("5", -1, None, 2.5, True):
         assert generate_sales_report(res, p, low_stock_limit=bad_limit)["warnings"]
@@ -652,14 +641,12 @@ def run_tests():
     snapshot = {k: dict(v) for k, v in p.items()}
     generate_sales_report(res, p)
     generate_sales_report(res, p)
-    assert p == snapshot and before != snapshot            # reports leave stock alone
+    assert p == snapshot and before != snapshot            
 
-    # --- empty report
     rep = generate_sales_report([], get_starter_products())
     assert rep["total_revenue"] == 0 and rep["top_customers"] == []
     assert rep["best_products"] == [] and rep["unique_customers"] == set()
 
-    # --- regression: option names that clash with parameter names, hostile values
     deep = []
     for _ in range(100000):
         deep = [deep]
@@ -672,7 +659,6 @@ def run_tests():
                     make_order([item_of("P002", deep)]), make_order(mouse(10 ** 5000))):
         assert process_order(hostile, p)["status"] == "rejected"
 
-    # --- regression: malformed results, helpers and money formatter never crash
     good = process_order(make_order(mouse(1)), get_starter_products())
     bad_results = [{"status": "paid"}, dict(good, total="12"), dict(good, items=5),
                    dict(good, customer=["x"]), {"status": "rejected"},
@@ -685,25 +671,24 @@ def run_tests():
     assert make_money_formatter()("x") == "N/A" and make_money_formatter(5)(1) == "$1.00"
     make_status_tracker()[0]("weird")
 
-    # --- scope helpers
     assert make_money_formatter()(5) == "$5.00" and make_money_formatter("PKR ")(5) == "PKR 5.00"
     print("All tests passed.\n")
 
 
-# ------------------------------------------------------------------ main
+#  main
 def main():
     run_tests()
 
     products = get_starter_products()
     orders = get_starter_orders() + [
-        # extra edge cases
+       
         {"order_id": "ORD004", "customer": "Sara",
          "items": [{"product_id": "P999", "quantity": 1}], "payment_status": "paid"},
         {"order_id": "ORD005", "customer": "Sara",
          "items": [{"product_id": "P001", "quantity": 50}], "payment_status": "paid"},
         {"order_id": "ORD006", "customer": "Bilal",
          "items": [{"product_id": "P002", "quantity": -2}], "payment_status": "paid"},
-        {"order_id": "ORD001", "customer": "Ali",            # duplicate order ID
+        {"order_id": "ORD001", "customer": "Ali",            
          "items": [{"product_id": "P002", "quantity": 1}], "payment_status": "paid"},
     ]
 
