@@ -32,7 +32,6 @@ TEXT_LIMIT = 30
 
 #  starter data
 def get_starter_products():
-    """Return a fresh product catalogue (no shared global data)."""
     return {
         "P001": {"name": "Laptop", "price": 1200, "category": "Electronics", "stock": 10},
         "P002": {"name": "Mouse", "price": 25, "category": "Accessories", "stock": 50},
@@ -42,7 +41,6 @@ def get_starter_products():
 
 
 def get_starter_orders():
-    """Return the sample orders."""
     return [
         {"order_id": "ORD001", "customer": "Ali",
          "items": [{"product_id": "P001", "quantity": 1},
@@ -60,8 +58,6 @@ def get_starter_orders():
 
 # safe helpers
 def describe(value):
-    """Short, safe text for error messages. Never calls repr() on unknown objects,
-    so deeply nested or huge values cannot crash the message itself."""
     if isinstance(value, str):
         return repr(value[:TEXT_LIMIT]) + ("..." if len(value) > TEXT_LIMIT else "")
     if value is None or isinstance(value, (bool, float)):
@@ -72,25 +68,20 @@ def describe(value):
 
 
 def is_number(value):
-    """True for a real, finite int/float of sensible size (not bool, NaN or inf)."""
     return (isinstance(value, (int, float)) and not isinstance(value, bool)
             and value == value and abs(value) <= NUMBER_LIMIT)
 
 
 def sum_amounts(*amounts):
-    """Add any number of money amounts and round to cents. (*args)
-    Values that are not usable numbers are ignored instead of crashing."""
     return round(sum(a for a in amounts if is_number(a)), 2)
 
 
 def calculate_total(subtotal, *adjustments):
-    """Subtotal plus any number of adjustments (negative = discount). (*args)"""
     return sum_amounts(subtotal, *adjustments)
 
 
 # validation
 def is_valid_amount(value):
-    """True for a finite, non-negative number up to MAX_AMOUNT (not bool/NaN/inf)."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
     if value != value:                    
@@ -99,13 +90,11 @@ def is_valid_amount(value):
 
 
 def is_valid_whole_number(value, minimum=0):
-    """True for a real integer (not bool) between minimum and MAX_AMOUNT."""
     return (isinstance(value, int) and not isinstance(value, bool)
             and minimum <= value <= MAX_AMOUNT)
 
 
 def check_product(product):
-    """Return '' if the product record is usable, otherwise the problem."""
     if not isinstance(product, dict):
         return "Invalid product data"
     for field in ("name", "category"):
@@ -119,7 +108,6 @@ def check_product(product):
 
 
 def validate_order(order, products):
-    """Return a list of ALL error messages. An empty list means the order is valid."""
     if not isinstance(order, dict):
         return ["Order is not a valid object"]
     if not isinstance(products, dict) or not products:
@@ -163,7 +151,6 @@ def validate_order(order, products):
 
 # calculations
 def valid_lines(order, products):
-    """(product_id, quantity) for every well-formed item; anything else is skipped."""
     items = order.get("items") if isinstance(order, dict) else None
     if not isinstance(items, list) or not isinstance(products, dict):
         return []
@@ -175,8 +162,6 @@ def valid_lines(order, products):
 
 
 def calculate_order_subtotal(order, products):
-    """Return (subtotal, line_items). Malformed items are skipped, so a bad or
-    empty order gives (0, []) instead of crashing."""
     line_items = [{"product_id": pid, "quantity": qty,
                    "line_total": products[pid]["price"] * qty}
                   for pid, qty in valid_lines(order, products)]
@@ -184,8 +169,6 @@ def calculate_order_subtotal(order, products):
 
 
 def calculate_discount(subtotal):
-    """Discount AMOUNT: 15% >= 1000, 10% >= 500, 5% >= 200, otherwise 0.
-    An invalid subtotal (None, text, NaN...) earns no discount."""
     if not is_number(subtotal):
         return 0
     for minimum, rate in DISCOUNT_TIERS:
@@ -196,8 +179,6 @@ def calculate_discount(subtotal):
 
 def calculate_shipping(subtotal, free_threshold=FREE_SHIPPING_THRESHOLD,
                        fee=SHIPPING_FEE):
-    """Free shipping at or above the threshold, otherwise the flat fee.
-    Invalid arguments fall back to the defaults (an invalid subtotal pays the fee)."""
     threshold = free_threshold if is_valid_amount(free_threshold) else FREE_SHIPPING_THRESHOLD
     fee = fee if is_valid_amount(fee) else SHIPPING_FEE
     return 0 if is_number(subtotal) and subtotal >= threshold else fee
@@ -205,7 +186,6 @@ def calculate_shipping(subtotal, free_threshold=FREE_SHIPPING_THRESHOLD,
 
 # options
 def resolve_options(options):
-    """Merge options with defaults. Returns (options, error_message)."""
     unknown = sorted(key for key in options if key not in DEFAULT_OPTIONS)
     if unknown:
         return None, f"Unknown option(s): {', '.join(unknown)}"
@@ -219,12 +199,10 @@ def resolve_options(options):
 
 # processing
 def clean_text(value):
-    """Trimmed text, or 'UNKNOWN' if the value is not usable text."""
     return value.strip() if isinstance(value, str) and value.strip() else "UNKNOWN"
 
 
 def build_rejection(order, errors):
-    """Standard 'rejected' result; never lets a bad value leak into reports."""
     is_dict = isinstance(order, dict)
     return {
         "order_id": clean_text(order.get("order_id") if is_dict else None),
@@ -235,26 +213,12 @@ def build_rejection(order, errors):
 
 
 def update_inventory(order, products):
-    """Reduce stock for each well-formed item. Never lets stock go below zero and
-    quietly skips malformed items instead of crashing."""
     for pid, qty in valid_lines(order, products):
         if qty <= products[pid]["stock"]:
             products[pid]["stock"] -= qty
 
 
 def process_order(order, products, /, **options):
-    """
-    Validate, price and (if paid) fulfil one order.
-
-    Options (**kwargs): include_shipping=True, apply_discount=True,
-                        free_shipping_threshold=500, shipping_fee=20
-
-    Status returned:
-      'paid'     valid + paid    -> stock reduced, counts as revenue
-      'pending'  valid + unpaid  -> priced (amount due kept), stock untouched,
-                                    never counted as revenue
-      'rejected' invalid         -> stock untouched
-    """
     opts, option_error = resolve_options(options)
     if option_error:
         return build_rejection(order, [option_error])
@@ -286,10 +250,7 @@ def process_order(order, products, /, **options):
 
 
 def process_all_orders(orders, products, /, **options):
-    """
-    Process orders in sequence, so earlier orders affect later stock checks.
-    A repeated order_id is rejected so one order is never fulfilled twice.
-    """
+   
     if not isinstance(orders, list):
         return []
 
@@ -309,7 +270,6 @@ def process_all_orders(orders, products, /, **options):
 
 # LEGB closures
 def make_money_formatter(symbol=None):
-    """Closure showing all four LEGB scopes."""
     if not isinstance(symbol, str):       
         symbol = DEFAULT_CURRENCY       
 
@@ -324,7 +284,6 @@ def make_money_formatter(symbol=None):
 
 
 def make_status_tracker():
-    """Closure: 'counts' lives in the enclosing scope, so no global is needed."""
     counts = {status: 0 for status in STATUSES}
 
     def record(status):
@@ -339,7 +298,6 @@ def make_status_tracker():
 
 #  reports
 def is_valid_result(result):
-    """True only for a complete, correctly typed result built by process_order."""
     if not isinstance(result, dict) or result.get("status") not in STATUSES:
         return False
     if not all(isinstance(result.get(f), str) for f in ("order_id", "customer")):
@@ -359,14 +317,14 @@ def is_valid_result(result):
 
 
 def usable_results(processed_orders):
-    """Keep only well-formed results, so reports never crash on bad data."""
+  
     if not isinstance(processed_orders, list):
         return []
     return [o for o in processed_orders if is_valid_result(o)]
 
 
 def product_label(products, product_id):
-    """Product name, falling back to its ID if the record is missing or broken."""
+    
     record = products.get(product_id) if isinstance(products, dict) else None
     if isinstance(record, dict) and isinstance(record.get("name"), str):
         return record["name"]
@@ -374,7 +332,7 @@ def product_label(products, product_id):
 
 
 def generate_customer_report(processed_orders):
-    """Top customer(s) by spend on PAID orders (ties are all returned)."""
+    
     results = usable_results(processed_orders)
     spending = {}
     for order in results:
@@ -396,7 +354,7 @@ def generate_customer_report(processed_orders):
 
 def generate_product_report(processed_orders, products,
                             low_stock_limit=DEFAULT_LOW_STOCK_LIMIT):
-    """Best-selling product(s) by units in PAID orders, plus low-stock items."""
+    
     warnings = []
     if not is_valid_whole_number(low_stock_limit):
         warnings.append(f"Invalid low_stock_limit {describe(low_stock_limit)}; "
@@ -435,7 +393,7 @@ def generate_product_report(processed_orders, products,
 
 def generate_sales_report(processed_orders, products,
                           low_stock_limit=DEFAULT_LOW_STOCK_LIMIT):
-    """Full report. Reads results only: it never changes products or orders."""
+   
     results = usable_results(processed_orders)
     record, summary = make_status_tracker()
     for order in results:
@@ -466,14 +424,14 @@ def generate_sales_report(processed_orders, products,
 
 
 def join_names(value):
-    """Comma-separated text from a list, tuple or set; empty text for anything else."""
+   
     if isinstance(value, set):
         value = sorted(str(v) for v in value)
     return ", ".join(str(v) for v in value) if isinstance(value, (list, tuple)) else ""
 
 
 def print_report(report, processed_orders, money=None):
-    """Print results and report. Bad or missing data is skipped, never a crash."""
+    
     formatter = money if callable(money) else make_money_formatter()
 
     def money(amount):                    
